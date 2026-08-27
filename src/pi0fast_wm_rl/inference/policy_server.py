@@ -33,6 +33,11 @@ class PolicyService:
         if not np.all(np.isfinite(observation.state)):
             raise ValueError("Observation state contains NaN or Inf")
         chunk = np.asarray(self.policy.predict_action_chunk(observation), dtype=np.float64)
-        if chunk.ndim != 2 or not np.all(np.isfinite(chunk)):
+        if (
+            chunk.ndim != 2
+            or chunk.shape[0] == 0
+            or chunk.shape[1] == 0
+            or not np.all(np.isfinite(chunk))
+        ):
             raise ValueError("Policy returned an invalid action chunk")
         return PolicyResponse(chunk, str(self.policy.metadata().get("type", "unknown")))
