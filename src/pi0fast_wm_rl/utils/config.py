@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from math import isfinite
 from pathlib import Path
 from typing import Any
 
@@ -53,8 +54,38 @@ def _required(config: dict[str, Any], section: str, fields: tuple[str, ...]) -> 
 def _positive(mapping: dict[str, Any], fields: tuple[str, ...], section: str) -> None:
     for field in fields:
         value = mapping[field]
-        if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0:
-            raise ConfigError(f"'{section}.{field}' must be a positive number")
+        if (
+            not isinstance(value, (int, float))
+            or isinstance(value, bool)
+            or value <= 0
+            or (isinstance(value, float) and not isfinite(value))
+        ):
+            raise ConfigError(f"'{section}.{field}' must be a positive finite number")
+
+
+def _integer(mapping: dict[str, Any], fields: tuple[str, ...], section: str) -> None:
+    for field in fields:
+        value = mapping[field]
+        if (
+            not isinstance(value, (int, float))
+            or isinstance(value, bool)
+            or (isinstance(value, float) and (not isfinite(value) or not value.is_integer()))
+        ):
+            raise ConfigError(f"'{section}.{field}' must be a finite integer")
+
+
+def _positive_integer(
+    mapping: dict[str, Any], fields: tuple[str, ...], section: str
+) -> None:
+    for field in fields:
+        value = mapping[field]
+        if (
+            not isinstance(value, (int, float))
+            or isinstance(value, bool)
+            or value <= 0
+            or (isinstance(value, float) and (not isfinite(value) or not value.is_integer()))
+        ):
+            raise ConfigError(f"'{section}.{field}' must be a positive integer")
 
 
 def validate_task_config(config: dict[str, Any]) -> dict[str, Any]:
@@ -68,11 +99,10 @@ def validate_task_config(config: dict[str, Any]) -> dict[str, Any]:
     safety = _required(config, "safety", ("max_action_delta", "max_velocity", "timeout_seconds"))
     if not str(task["name"]).strip() or not str(task["instruction"]).strip():
         raise ConfigError("'task.name' and 'task.instruction' must be non-empty")
-    _positive(task, ("max_episode_steps",), "task")
-    _positive(
-        control,
-        ("frequency_hz", "action_dim", "state_dim", "chunk_size", "execute_steps"),
-        "control",
+    _positive_integer(task, ("max_episode_steps",), "task")
+    _positive(control, ("frequency_hz",), "control")
+    _positive_integer(
+        control, ("action_dim", "state_dim", "chunk_size", "execute_steps"), "control"
     )
     _positive(safety, ("max_action_delta", "max_velocity", "timeout_seconds"), "safety")
     if control["action_mode"] not in {"delta_joint", "absolute_joint"}:
@@ -89,7 +119,7 @@ def validate_robot_config(config: dict[str, Any]) -> dict[str, Any]:
         "robot",
         ("type", "state_dim", "action_dim", "initial_state", "joint_min", "joint_max"),
     )
-    _positive(robot, ("state_dim", "action_dim"), "robot")
+    _positive_integer(robot, ("state_dim", "action_dim"), "robot")
     state_dim = int(robot["state_dim"])
     for field in ("initial_state", "joint_min", "joint_max"):
         if not isinstance(robot[field], list) or len(robot[field]) != state_dim:
@@ -105,7 +135,10 @@ def validate_robot_config(config: dict[str, Any]) -> dict[str, Any]:
 def validate_camera_config(config: dict[str, Any]) -> dict[str, Any]:
     """Validate common camera fields."""
     camera = _required(config, "camera", ("type", "name", "width", "height", "fps"))
-    _positive(camera, ("width", "height", "fps"), "camera")
+    _positive_integer(camera, ("width", "height"), "camera")
+    _positive(camera, ("fps",), "camera")
+    if "seed" in camera:
+        _integer(camera, ("seed",), "camera")
     return config
 
 
@@ -127,8 +160,8 @@ def validate_training_config(config: dict[str, Any], expected_policy: str) -> di
         ),
     )
     policy = _required(config, "policy", ("type", "chunk_size", "n_action_steps"))
-    _positive(training, ("steps", "batch_size"), "training")
-    _positive(policy, ("chunk_size", "n_action_steps"), "policy")
+    _positive_integer(training, ("steps", "batch_size"), "training")
+    _positive_integer(policy, ("chunk_size", "n_action_steps"), "policy")
     if training["backend"] != "lerobot-train":
         raise ConfigError("Only the verified 'lerobot-train' backend is supported")
     if policy["type"] != expected_policy:
