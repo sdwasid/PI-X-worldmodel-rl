@@ -88,6 +88,38 @@ class ActionAdapter:
             raise ValueError("state_normalization must match model_dim")
         if action_normalization is not None and len(action_normalization.mean) != model_dim:
             raise ValueError("action_normalization must match model_dim")
+        if gripper is not None:
+            for field, index, dimension in (
+                ("model_index", gripper.model_index, model_dim),
+                ("robot_index", gripper.robot_index, robot_dim),
+            ):
+                if (
+                    isinstance(index, (bool, np.bool_))
+                    or not isinstance(index, (int, np.integer))
+                    or index < 0
+                    or index >= dimension
+                ):
+                    raise ValueError(
+                        f"gripper.{field} must be an integer in [0, {dimension})"
+                    )
+            for field, bounds in (
+                ("model_range", gripper.model_range),
+                ("robot_range", gripper.robot_range),
+            ):
+                invalid_range_message = (
+                    f"gripper.{field} must contain two finite numeric endpoints"
+                )
+                try:
+                    values = np.asarray(bounds)
+                    numeric = np.issubdtype(values.dtype, np.integer) or np.issubdtype(
+                        values.dtype, np.floating
+                    )
+                except (TypeError, ValueError):
+                    raise ValueError(invalid_range_message) from None
+                if values.shape != (2,) or not numeric or not np.all(np.isfinite(values)):
+                    raise ValueError(invalid_range_message)
+                if values[0] >= values[1]:
+                    raise ValueError(f"gripper.{field} must be strictly increasing")
         self.robot_from_model = mapping
         self.state_normalization = state_normalization
         self.action_normalization = action_normalization
