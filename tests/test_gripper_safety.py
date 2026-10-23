@@ -1,5 +1,4 @@
 import pytest
-
 from lerobot.rollout.gripper_safety import (
     GripperSafetyError,
     GripperSafetyGuard,

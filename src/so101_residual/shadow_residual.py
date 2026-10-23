@@ -7,21 +7,19 @@ import torch
 from lerobot.rollout.residual_observation import build_residual_observation
 from stable_baselines3 import PPO
 
-PPO_PATH = '/home/pc-workzl/Downloads/lerobot061-src/outputs/residual_ppo_obs2054_pair_update8e_lr2e6_20261011'
-
-LOG_PATH = Path(
+PPO_PATH = (
     "/home/pc-workzl/Downloads/lerobot061-src/"
-    "outputs/rl_shadow/shadow_actions.csv"
+    "outputs/residual_ppo_obs2054_pair_update8e_lr2e6_20261011"
 )
 
+LOG_PATH = Path("/home/pc-workzl/Downloads/lerobot061-src/outputs/rl_shadow/shadow_actions.csv")
+
 OBS2054_LOG_PATH = Path(
-    "/home/pc-workzl/Downloads/lerobot061-src/"
-    "outputs/rl_shadow/shadow_obs2054.f32"
+    "/home/pc-workzl/Downloads/lerobot061-src/outputs/rl_shadow/shadow_obs2054.f32"
 )
 
 ONPOLICY_LOG_PATH = Path(
-    "/home/pc-workzl/Downloads/lerobot061-src/"
-    "outputs/rl_shadow/shadow_onpolicy.f32"
+    "/home/pc-workzl/Downloads/lerobot061-src/outputs/rl_shadow/shadow_onpolicy.f32"
 )
 
 RESIDUAL_SCALE = np.array(
@@ -74,9 +72,7 @@ def log_shadow_residual(obs_frame, action_dict):
     )
 
     if state.shape != (6,):
-        raise ValueError(
-            f"Expected state shape (6,), got {state.shape}"
-        )
+        raise ValueError(f"Expected state shape (6,), got {state.shape}")
 
     if not np.isfinite(state).all():
         raise ValueError("State contains NaN or Inf")
@@ -84,20 +80,14 @@ def log_shadow_residual(obs_frame, action_dict):
     ppo_obs = build_residual_observation(obs_frame)
 
     if ppo_obs.shape != (2054,):
-        raise ValueError(
-            f"Expected PPO observation shape (2054,), got {ppo_obs.shape}"
-        )
+        raise ValueError(f"Expected PPO observation shape (2054,), got {ppo_obs.shape}")
 
     if not np.isfinite(ppo_obs).all():
-        raise ValueError(
-            "PPO observation contains NaN or Inf"
-        )
+        raise ValueError("PPO observation contains NaN or Inf")
 
     # Lazy macro state. A fresh Python rollout process starts from frame 0.
     if not hasattr(log_shadow_residual, "_macro_hold"):
-        log_shadow_residual._macro_hold = ResidualMacroHold(
-            hold_frames=10
-        )
+        log_shadow_residual._macro_hold = ResidualMacroHold(hold_frames=10)
         log_shadow_residual._frame_index = 0
         log_shadow_residual._raw_action = None
         log_shadow_residual._value = None
@@ -113,27 +103,16 @@ def log_shadow_residual(obs_frame, action_dict):
         exist_ok=True,
     )
 
-    macro_obs_path = (
-        LOG_PATH.parent /
-        "shadow_macro_obs2054.f32"
-    )
+    macro_obs_path = LOG_PATH.parent / "shadow_macro_obs2054.f32"
 
-    macro_onpolicy_path = (
-        LOG_PATH.parent /
-        "shadow_macro_onpolicy.f32"
-    )
+    macro_onpolicy_path = LOG_PATH.parent / "shadow_macro_onpolicy.f32"
 
-    macro_csv_path = (
-        LOG_PATH.parent /
-        "shadow_macro_decisions.csv"
-    )
+    macro_csv_path = LOG_PATH.parent / "shadow_macro_decisions.csv"
 
     if sampled_now:
         model = _get_model()
 
-        obs_tensor, _ = model.policy.obs_to_tensor(
-            ppo_obs.reshape(1, -1)
-        )
+        obs_tensor, _ = model.policy.obs_to_tensor(ppo_obs.reshape(1, -1))
 
         with torch.no_grad():
             (
@@ -145,27 +124,11 @@ def log_shadow_residual(obs_frame, action_dict):
                 deterministic=False,
             )
 
-        raw_action = (
-            raw_action_t
-            .cpu()
-            .numpy()
-            .reshape(6)
-            .astype(np.float32)
-        )
+        raw_action = raw_action_t.cpu().numpy().reshape(6).astype(np.float32)
 
-        value = np.float32(
-            value_t
-            .cpu()
-            .numpy()
-            .reshape(-1)[0]
-        )
+        value = np.float32(value_t.cpu().numpy().reshape(-1)[0])
 
-        log_prob = np.float32(
-            log_prob_t
-            .cpu()
-            .numpy()
-            .reshape(-1)[0]
-        )
+        log_prob = np.float32(log_prob_t.cpu().numpy().reshape(-1)[0])
 
         normalized_action = np.clip(
             raw_action,
@@ -173,13 +136,9 @@ def log_shadow_residual(obs_frame, action_dict):
             1.0,
         ).astype(np.float32)
 
-        macro.set_new_action(
-            normalized_action
-        )
+        macro.set_new_action(normalized_action)
 
-        log_shadow_residual._raw_action = (
-            raw_action.copy()
-        )
+        log_shadow_residual._raw_action = raw_action.copy()
         log_shadow_residual._value = value
         log_shadow_residual._log_prob = log_prob
 
@@ -205,20 +164,11 @@ def log_shadow_residual(obs_frame, action_dict):
         )
 
         with macro_onpolicy_path.open("ab") as f:
-            f.write(
-                onpolicy_record.tobytes(
-                    order="C"
-                )
-            )
+            f.write(onpolicy_record.tobytes(order="C"))
 
-        candidate_residual = (
-            normalized_action
-            * RESIDUAL_SCALE
-        ).astype(np.float32)
+        candidate_residual = (normalized_action * RESIDUAL_SCALE).astype(np.float32)
 
-        macro_new_file = (
-            not macro_csv_path.exists()
-        )
+        macro_new_file = not macro_csv_path.exists()
 
         with macro_csv_path.open(
             "a",
@@ -227,44 +177,36 @@ def log_shadow_residual(obs_frame, action_dict):
             writer = csv.writer(f)
 
             if macro_new_file:
-                writer.writerow([
-                    "timestamp",
-                    "frame_index",
-                    "decision_index",
-                    *[
-                        f"raw_action_{i}"
-                        for i in range(6)
-                    ],
-                    "value",
-                    "log_prob",
-                    *[
-                        f"ppo_normalized_{i}"
-                        for i in range(6)
-                    ],
-                    *[
-                        f"ppo_residual_{i}"
-                        for i in range(6)
-                    ],
-                ])
+                writer.writerow(
+                    [
+                        "timestamp",
+                        "frame_index",
+                        "decision_index",
+                        *[f"raw_action_{i}" for i in range(6)],
+                        "value",
+                        "log_prob",
+                        *[f"ppo_normalized_{i}" for i in range(6)],
+                        *[f"ppo_residual_{i}" for i in range(6)],
+                    ]
+                )
 
-            writer.writerow([
-                time.time(),
-                frame_index,
-                macro.decision_count,
-                *raw_action.tolist(),
-                float(value),
-                float(log_prob),
-                *normalized_action.tolist(),
-                *candidate_residual.tolist(),
-            ])
+            writer.writerow(
+                [
+                    time.time(),
+                    frame_index,
+                    macro.decision_count,
+                    *raw_action.tolist(),
+                    float(value),
+                    float(log_prob),
+                    *normalized_action.tolist(),
+                    *candidate_residual.tolist(),
+                ]
+            )
 
     # One held PPO action is consumed on every control frame.
     normalized_action = macro.next_frame()
 
-    residual = (
-        normalized_action
-        * RESIDUAL_SCALE
-    ).astype(np.float32)
+    residual = (normalized_action * RESIDUAL_SCALE).astype(np.float32)
 
     act_action = np.asarray(
         list(action_dict.values()),
@@ -272,9 +214,7 @@ def log_shadow_residual(obs_frame, action_dict):
     )
 
     if act_action.shape != (6,):
-        raise ValueError(
-            f"Expected ACT action shape (6,), got {act_action.shape}"
-        )
+        raise ValueError(f"Expected ACT action shape (6,), got {act_action.shape}")
 
     # Per-frame debug log.
     new_file = not LOG_PATH.exists()
@@ -286,37 +226,29 @@ def log_shadow_residual(obs_frame, action_dict):
         writer = csv.writer(f)
 
         if new_file:
-            writer.writerow([
-                "timestamp",
-                *[
-                    f"state_{i}"
-                    for i in range(6)
-                ],
-                *[
-                    f"act_{i}"
-                    for i in range(6)
-                ],
-                *[
-                    f"ppo_normalized_{i}"
-                    for i in range(6)
-                ],
-                *[
-                    f"ppo_residual_{i}"
-                    for i in range(6)
-                ],
-                "macro_sampled",
-                "macro_decision_index",
-            ])
+            writer.writerow(
+                [
+                    "timestamp",
+                    *[f"state_{i}" for i in range(6)],
+                    *[f"act_{i}" for i in range(6)],
+                    *[f"ppo_normalized_{i}" for i in range(6)],
+                    *[f"ppo_residual_{i}" for i in range(6)],
+                    "macro_sampled",
+                    "macro_decision_index",
+                ]
+            )
 
-        writer.writerow([
-            time.time(),
-            *state.tolist(),
-            *act_action.tolist(),
-            *normalized_action.tolist(),
-            *residual.tolist(),
-            int(sampled_now),
-            macro.decision_count,
-        ])
+        writer.writerow(
+            [
+                time.time(),
+                *state.tolist(),
+                *act_action.tolist(),
+                *normalized_action.tolist(),
+                *residual.tolist(),
+                int(sampled_now),
+                macro.decision_count,
+            ]
+        )
 
     # Keep the complete per-control-frame observation log for debugging.
     with OBS2054_LOG_PATH.open("ab") as obs_f:
